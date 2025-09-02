@@ -7,13 +7,15 @@
 class SineGenerator : public QIODevice {
     Q_OBJECT
 public:
+    enum class ChannelMode { LeftOnly, RightOnly, Both }; // ✨
+
     explicit SineGenerator(QObject *parent = nullptr);
 
-    // Must be called before start(): defines audio frame format
     void configure(int sampleRate, int channels, QAudioFormat::SampleFormat fmt);
-
-    // Change frequency on the fly (Hz). Rebuilds the internal loop buffer.
     void setFrequency(int freqHz);
+
+    // ✨ New: select output channel(s)
+    void setChannelMode(ChannelMode mode);
 
     void start();
     void stop();
@@ -27,15 +29,16 @@ protected:
     }
 
 private:
-    void rebuildBuffer(); // rebuild one-period buffer for current freq/format
+    void rebuildBuffer(); // rebuild one-period buffer
 
     QByteArray m_buffer;     // interleaved one-period buffer
     int        m_posBytes = 0;
 
     int m_sampleRate = 48000;
-    int m_channels   = 1;
+    int m_channels   = 2; // ✨ stereo default
     QAudioFormat::SampleFormat m_sampleFmt = QAudioFormat::Float;
-    int m_freqHz     = 1000;   // default tone
+    int m_freqHz     = 1000;
 
-    QMutex m_mutex; // protects buffer rebuild / pos
+    ChannelMode m_mode = ChannelMode::Both; // ✨
+    QMutex m_mutex;
 };

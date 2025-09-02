@@ -1,10 +1,11 @@
 #include "mainwindow.h"
-#include <QApplication>
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
+#include <QComboBox>     // ✨ add
 #include <QLabel>
 #include <QGroupBox>
 
@@ -30,6 +31,7 @@ void MainWindow::setupUi() {
     auto *group = new QGroupBox("Signal Controls", central);
     auto *glyt  = new QVBoxLayout(group);
 
+    // Frequency
     auto *rowFreq = new QHBoxLayout;
     auto *lblF = new QLabel("Frequency (Hz):", group);
     m_spinFreq = new QSpinBox(group);
@@ -39,6 +41,7 @@ void MainWindow::setupUi() {
     rowFreq->addWidget(lblF);
     rowFreq->addWidget(m_spinFreq, 1);
 
+    // Volume
     auto *rowVol = new QHBoxLayout;
     auto *lblV = new QLabel("Volume (%):", group);
     m_sliderVol = new QSlider(Qt::Horizontal, group);
@@ -47,8 +50,20 @@ void MainWindow::setupUi() {
     rowVol->addWidget(lblV);
     rowVol->addWidget(m_sliderVol, 1);
 
+    // ✨ Channel selection
+    auto *rowCh = new QHBoxLayout;
+    auto *lblC = new QLabel("Output Channel:", group);
+    m_comboChannel = new QComboBox(group);
+    m_comboChannel->addItem("Left");
+    m_comboChannel->addItem("Right");
+    m_comboChannel->addItem("Both");
+    m_comboChannel->setCurrentIndex(2); // Both by default
+    rowCh->addWidget(lblC);
+    rowCh->addWidget(m_comboChannel, 1);
+
     glyt->addLayout(rowFreq);
     glyt->addLayout(rowVol);
+    glyt->addLayout(rowCh);  // ✨ add
 
     m_lblStatus = new QLabel("Ready.", central);
 
@@ -58,29 +73,31 @@ void MainWindow::setupUi() {
 
     setCentralWidget(central);
     setWindowTitle("Qt6 Signal Generator (48 kHz)");
-    resize(480, 200);
+    resize(520, 220);
 
     connect(m_btnStart, &QPushButton::clicked, this, &MainWindow::startAudio);
     connect(m_btnStop,  &QPushButton::clicked, this, &MainWindow::stopAudio);
     connect(m_spinFreq, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::freqChanged);
     connect(m_sliderVol, &QSlider::valueChanged, this, &MainWindow::volumeChanged);
+    connect(m_comboChannel, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::channelModeChanged); // ✨ add
 }
 
 void MainWindow::setupAudio() {
-    // Pick default OUTPUT device and 48 kHz mono float (fallback if needed)
     m_device = QMediaDevices::defaultAudioOutput();
 
     m_format.setSampleRate(48000);
-    m_format.setChannelCount(1);                  // mono
-    m_format.setSampleFormat(QAudioFormat::Float);// 32-bit float
+    m_format.setChannelCount(2);                   // ✨ stereo
+    m_format.setSampleFormat(QAudioFormat::Float); // 32-bit float
 
     if (!m_device.isFormatSupported(m_format)) {
-        // Try Int16 mono @ 48 kHz
         m_format.setSampleFormat(QAudioFormat::Int16);
         if (!m_device.isFormatSupported(m_format)) {
-            // fallback to preferred format to guarantee playback
             m_format = m_device.preferredFormat();
         }
+        // Ensure we still end up with 2 channels if possible
+        if (m_format.channelCount() < 2)
+            m_format.setChannelCount(2);
     }
 
     // Prepare generator with current format & freq
@@ -88,6 +105,7 @@ void MainWindow::setupAudio() {
                     m_format.channelCount(),
                     m_format.sampleFormat());
     m_gen.setFrequency(m_spinFreq->value());
+    channelModeChanged(m_comboChannel->currentIndex()); // ✨ apply initial mode
 
     m_lblStatus->setText(
         QString("Device: %1 | %2 Hz, %3 ch, fmt=%4")
@@ -98,7 +116,7 @@ void MainWindow::setupAudio() {
 }
 
 void MainWindow::startAudio() {
-    if (m_sink) return; // already running
+    if (m_sink) return;
     m_sink = new QAudioSink(m_device, m_format, this);
     connect(m_sink, &QAudioSink::stateChanged, this, [this](QAudio::State s){
         m_lblStatus->setText(
@@ -108,7 +126,7 @@ void MainWindow::startAudio() {
                 .arg(m_format.channelCount()));
     });
 
-    m_gen.start(); // open QIODevice for reading
+    m_gen.start();
     m_sink->setVolume(m_sliderVol->value() / 100.0f);
     m_sink->start(&m_gen);
 
@@ -134,4 +152,13 @@ void MainWindow::freqChanged(int hz) {
 
 void MainWindow::volumeChanged(int volPercent) {
     if (m_sink) m_sink->setVolume(volPercent / 100.0f);
+}
+
+// ✨ New: map combo index to generator mode
+void MainWindow::channelModeChanged(int idx) {
+    switch (idx) {
+    case 0: m_gen.setChannelMode(SineGenerator::ChannelMode::LeftOnly);  break;
+    case 1: m_gen.setChannelMode(SineGenerator::ChannelMode::RightOnly); break;
+    default: m_gen.setChannelMode(SineGenerator::ChannelMode::Both);     break;
+    }
 }
