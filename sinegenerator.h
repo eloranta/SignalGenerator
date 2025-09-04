@@ -4,19 +4,17 @@
 #include <QByteArray>
 #include <QMutex>
 
-class SineGenerator : public QIODevice {
+class SineGenerator : public QIODevice
+{
     Q_OBJECT
 public:
-    enum class ChannelMode { LeftOnly, RightOnly, Both }; // ✨
+    enum class ChannelMode { LeftOnly, RightOnly, Both };
 
     explicit SineGenerator(QObject *parent = nullptr);
 
     void configure(int sampleRate, int channels, QAudioFormat::SampleFormat fmt);
     void setFrequency(int freqHz);
-
-    // ✨ New: select output channel(s)
     void setChannelMode(ChannelMode mode);
-
     void start();
     void stop();
 
@@ -35,10 +33,10 @@ private:
     int        m_posBytes = 0;
 
     int m_sampleRate = 48000;
-    int m_channels   = 2; // ✨ stereo default
+    int m_channels   = 2; // stereo default
     QAudioFormat::SampleFormat m_sampleFmt = QAudioFormat::Float;
     int m_freqHz     = 1000;
 
-    ChannelMode m_mode = ChannelMode::Both; // ✨
+    ChannelMode m_mode = ChannelMode::Both;
     QMutex m_mutex;
 };
